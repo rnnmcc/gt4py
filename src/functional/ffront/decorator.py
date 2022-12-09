@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import ast
 import collections
 import dataclasses
 import functools
@@ -26,7 +27,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generator, Generic, SupportsFloat, SupportsInt, TypeAlias, TypeVar
+from typing import Generator, Generic, Sequence, SupportsFloat, SupportsInt, TypeAlias, TypeVar
 
 import numpy as np
 from devtools import debug
@@ -457,13 +458,16 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
+        py_ast_passes: Sequence[ast.NodeTransformer] = (),
     ) -> FieldOperator[OperatorNodeT]:
         operator_attributes = operator_attributes or {}
 
         source_def = SourceDefinition.from_function(definition)
         closure_vars = get_closure_vars_from_function(definition)
         annotations = typing.get_type_hints(definition)
-        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
+        foast_definition_node = FieldOperatorParser.apply(
+            source_def, closure_vars, annotations, py_ast_passes=py_ast_passes
+        )
         loc = foast_definition_node.location
         operator_attribute_nodes = {
             key: foast.Constant(
@@ -613,11 +617,7 @@ def field_operator(
     ...
 
 
-def field_operator(
-    definition=None,
-    *,
-    backend=None,
-):
+def field_operator(definition=None, *, backend=None, py_ast_passes=()):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -635,7 +635,7 @@ def field_operator(
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend)
+        return FieldOperator.from_function(definition, backend, py_ast_passes=py_ast_passes)
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
@@ -670,6 +670,7 @@ def scan_operator(
     forward: bool = True,
     init: Scalar = 0.0,
     backend=None,
+    py_ast_passes=(),
 ) -> FieldOperator[foast.ScanOperator] | Callable[
     [types.FunctionType], FieldOperator[foast.ScanOperator]
 ]:
@@ -708,6 +709,7 @@ def scan_operator(
             backend,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
+            py_ast_passes=py_ast_passes,
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)

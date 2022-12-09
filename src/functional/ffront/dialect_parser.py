@@ -15,7 +15,7 @@ import ast
 import textwrap
 import typing
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Sequence
 
 from eve.concepts import SourceLocation
 from eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
@@ -90,11 +90,14 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         source_definition: SourceDefinition,
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
+        py_ast_passes: Sequence[ast.NodeTransformer] = (),
     ) -> DialectRootT:
 
         source, filename, starting_line = source_definition
         try:
             definition_ast = ast.parse(textwrap.dedent(source)).body[0]
+            for p in py_ast_passes:
+                definition_ast = p.visit(definition_ast)
             definition_ast = RemoveDocstrings.apply(definition_ast)
             definition_ast = FixMissingLocations.apply(definition_ast)
             definition_ast = ast.increment_lineno(definition_ast, starting_line - 1)
